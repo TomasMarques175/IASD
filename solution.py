@@ -62,7 +62,35 @@ class BAProblem(search.Problem):
         return total_cost
 
     def check(self, sol):
-        pass
+        # Creates a list with berth size
+        vessels_times = [[] for _ in range(self.berth_size)]
+        for i in range(len(sol)):
+            # Checks if the mooring time in the output comes before the arrival time
+            if sol[i][0] < self.vessels[i][0]:
+                # print("Mooring time is less than arrival time")
+                return False
+            
+            # Checks if the last last berth utilized is greater than the berth size
+            if sol[i][1]+self.vessels[i][2] > self.berth_size:
+                return False
+            
+            for berth_index in range(self.vessels[i][2]):
+                for j in vessels_times[sol[i][1]+berth_index]:
+                    if (
+                        j != None
+                        and
+                        (
+                        (sol[i][0] >= j[0] and sol[i][0] <= j[1]) 
+                        or 
+                        (sol[i][0]+self.vessels[i][1]-1 >= j[0] and sol[i][0]+self.vessels[i][1]-1 <= j[1])
+                        )
+                        or
+                        (sol[i][0] <= j[0] and sol[i][0]+self.vessels[i][1]-1 >= j[1])
+                        ):
+                        return False
+                times = [sol[i][0],sol[i][0]+self.vessels[i][1]-1]
+                vessels_times[sol[i][1]+berth_index].append(times)
+        return True
 
 def main():
 
@@ -74,6 +102,8 @@ def main():
     print(sol)
     # baproblem.check(baproblem.config, baproblem.sol)
     total_cost = baproblem.cost(sol)
+    check_bool = baproblem.check(sol)
+    print(check_bool)
 
     # Print the total cost
     print(f"Total Cost: {total_cost}")
