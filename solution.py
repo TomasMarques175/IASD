@@ -2,8 +2,11 @@ import search
 import numpy as np
 import ast
 
+# 1 2 3
+
 class BAProblem(search.Problem):
     def __init__(self):
+        # global variables initialization
         self.initial = None
         self.config = None
         self.berth_size = None
@@ -13,24 +16,23 @@ class BAProblem(search.Problem):
         N = None
         
         # Read the file line by line
-        with open(fh, 'r') as file:
-            for line in file:
-                line = line.strip()
-                
-                # Ignore empty lines and comment lines
-                if not line or line.startswith('#'):
-                    continue
-                
-                # The first non-comment line should contain S and N
-                if self.berth_size is None and N is None:
-                    self.berth_size, N = map(int, line.split())
-                    continue
-                
-                # Process the next N lines for vessel details
-                if N > 0:
-                    vessel_info = list(map(int, line.split()))
-                    self.vessels.append(vessel_info)
-                    N -= 1
+        for line in fh:
+            line = line.strip()
+            
+            # Ignore empty lines and comment lines
+            if not line or line.startswith('#'):
+                continue
+            
+            # The first non-comment line should contain berth size and number of vessels
+            if self.berth_size is None and N is None:
+                self.berth_size, N = map(int, line.split())
+                continue
+            
+            # Process the next N lines for details on each vessel
+            if N > 0:
+                vessel_info = list(map(int, line.split()))
+                self.vessels.append(vessel_info)
+                N -= 1
 
     def load_sol(self, fhs):
         with open(fhs, 'r') as file:
@@ -47,17 +49,16 @@ class BAProblem(search.Problem):
         
         # Iterate through each vessel in the solution
         for i, (mooring_time, _) in enumerate(sol):
-            # Extract the vessel's parameters from self (assuming self.vessels exists)
-            arrival_time = self.vessels[i][0] # arrivaltime
+            # Extract the vessel's parameters from self
+            arrival_time = self.vessels[i][0] # arrival time
             processing_time = self.vessels[i][1] # proccessing time
             weight = self.vessels[i][3] # weight
             
             # Calculate the flow time
             flow_time = (mooring_time + processing_time) - arrival_time
             
-            # Calculate the weighted flow time for this vessel
+            # Calculate the total cost for this vessel and sum it 
             total_cost += flow_time * weight
-            print(f"Total Cost: {total_cost}")
         # Return the total cost 
         return total_cost
 
@@ -65,29 +66,39 @@ class BAProblem(search.Problem):
         # Creates a list with berth size
         vessels_times = [[] for _ in range(self.berth_size)]
         for i in range(len(sol)):
-            # Checks if the mooring time in the output comes before the arrival time
+            # Checks if the mooring time in the output comes before the arrival
+            # time
             if sol[i][0] < self.vessels[i][0]:
-                # print("Mooring time is less than arrival time")
                 return False
             
-            # Checks if the last last berth utilized is greater than the berth size
+            # Checks if the last berth utilized by the vessel is greater than 
+            # the berth size
             if sol[i][1]+self.vessels[i][2] > self.berth_size:
                 return False
             
+            # Checks each berth space utilized by the vessel
+            # This is done by trying to fill all the birth time spaces
             for berth_index in range(self.vessels[i][2]):
                 for j in vessels_times[sol[i][1]+berth_index]:
                     if (
+                        # Checks if the berth is empty for all the time spaces
                         j != None
                         and
+                        # Checks if the arrival time and departure time 
+                        # intersect already ocupied times in this berth
                         (
-                        (sol[i][0] >= j[0] and sol[i][0] <= j[1]) 
-                        or 
-                        (sol[i][0]+self.vessels[i][1]-1 >= j[0] and sol[i][0]+self.vessels[i][1]-1 <= j[1])
+                            (sol[i][0] >= j[0] and sol[i][0] <= j[1]) 
+                            or 
+                            (sol[i][0]+self.vessels[i][1]-1 >= j[0] and sol[i][0]+self.vessels[i][1]-1 <= j[1])
                         )
                         or
-                        (sol[i][0] <= j[0] and sol[i][0]+self.vessels[i][1]-1 >= j[1])
+                        # Checks if the berth is being ocupied from arrival time 
+                        # till it departures for this vessel
+                        (
+                            sol[i][0] <= j[0] and sol[i][0]+self.vessels[i][1]-1 >= j[1])
                         ):
                         return False
+                # Updates the ocupied times for this berth space
                 times = [sol[i][0],sol[i][0]+self.vessels[i][1]-1]
                 vessels_times[sol[i][1]+berth_index].append(times)
         return True
