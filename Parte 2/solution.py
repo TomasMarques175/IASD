@@ -5,40 +5,79 @@ import ast
 class BAProblem(search.Problem):
     def __init__(self):
         # global variables initialization
-        self.initial = None
+        self.initial = []
         self.config = None
         self.berth_size = None
         self.vessels = []
 
+    ## Parte 2
     def result(self, state, action):
         """Returns the state that results from executing the given action
         in the given state"""
+        # TODO: Implement this
         pass
-    
+
     def actions(self, state):
         """Returns the list of actions that can be executed in the given
         state"""
-        pass
+        # TODO: Implement this
+
+        # Ideia: Para um dado navio ver se ele pode ser alocado em todos os seus berços possíveis
+        # Para isso, é necessário verificar se o berço está disponível para o navio em um dado tempo
+        # Se estiver disponível, adicionar a ação à lista de ações disponíveis com todos os barcos que 
+        # chegam depois desse tempo de processamento e todos os que chegaram antes e ainda n foram processados
+
+
+
+        # state contains the current schedule (which berths are occupied at what times)
+        available_actions = []
+        berths = state['berths']  # Berth availability list
+        vessels = state['remaining_vessels']  # Vessels to be scheduled
+
+        for vessel in vessels:
+            a_v = vessel['arrival_time']
+            p_v = vessel['processing_time']
+            s_v = vessel['size']
+
+            for berth_index in range(len(berths)):
+                # Check if the berth has enough contiguous free sections for the vessel size
+                for start_time in range(a_v, max_time):
+                    if berth_is_available(berth_index, start_time, p_v, s_v, berths):
+                        # If the berth is available, add this as a valid action
+                        available_actions.append((berth_index, start_time))
+    
+        return available_actions
     
     def goal_test(self, state):
         """Returns True if the state is a goal"""
+        # TODO: Implement this
         pass
     
-    def path_cost(self, c state1, action, state2):
+    def path_cost(self, c, state1, action, state2):
         """Returns the cost of a path that arrives at state2 from state1
         via action, assuming cost c to get up to state1"""
-        pass
+        print("c: ", c)
+        print("state1: ", state1)
+        print("precessing time: ", state1[2], "\n")
+        # If the arrival time of the vessel in state2 is greater than the sum of the cost and the processing time of the vessel in state1
+        if state2[0] > c + state1[1]:
+            return state2[0]
+        # Else, return the sum of the cost and the processing time of the vessel in state1
+        else:
+            return c + state1[1]
     
     def solve(self):
         """Calls the uninformed search algorithm chosen.
         Returns a solution using the specified format"""
-        pass
-    
-    def load(self, fh):
-        """Loads a BAP problem from the file object fh.
-        It may initialize self.initial here"""
-        pass
+        
+        # Call the uniform_cost_search method from the search module
+        solution = search.uniform_cost_search(self)
+        print("\nSolution: ", solution)
+        print("\nCost: ", self.cost(solution))
+        return solution
 
+
+    ## Parte 1
     def load(self, fh):
         N = None
         
@@ -55,11 +94,21 @@ class BAProblem(search.Problem):
                 self.berth_size, N = map(int, line.split())
                 continue
             
+            arrival_time = None
             # Process the next N lines for details on each vessel
             if N > 0:
                 vessel_info = list(map(int, line.split()))
                 self.vessels.append(vessel_info)
+                if arrival_time is None or arrival_time > vessel_info[0]:
+                    self.initial.append(vessel_info)
                 N -= 1
+
+            """ # Initial state: all berths are empty, and all vessels are unscheduled
+            self.initial_state = {
+                'berths': self.berths,  # List of empty berths
+                'remaining_vessels': self.vessels  # All vessels are unscheduled
+            } """
+
 
     def load_sol(self, fhs):
         with open(fhs, 'r') as file:
@@ -136,14 +185,9 @@ def main():
     baproblem.load('Tests\ex100.dat')
     print(baproblem.berth_size)
     print(baproblem.vessels)
-    sol = baproblem.load_sol('Tests\ex100.plan')
-    print(sol)
-    # baproblem.check(baproblem.config, baproblem.sol)
-    total_cost = baproblem.cost(sol)
-    check_bool = baproblem.check(sol)
-    print(check_bool)
+    print(baproblem.initial)
+    baproblem.solve()
 
-    # Print the total cost
-    print(f"Total Cost: {total_cost}")
+
 if __name__=='__main__':
     main()
