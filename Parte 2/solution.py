@@ -1,19 +1,20 @@
 import search
 import numpy as np
 import ast
-###xdazasd
+
 class BAProblem(search.Problem):
     def __init__(self):
         # global variables initialization
         self.initial = None
         self.config = None
         self.berth_size = None
+        self.vessel_size = None
         self.berths = None
         self.vessels = []
 
     def load(self, fh):
         N = None
-        
+
         # Read the file line by line
         for line in fh:
             line = line.strip()
@@ -26,8 +27,9 @@ class BAProblem(search.Problem):
                 self.berth_size, N = map(int, line.split())
                 print(self.berth_size)
                 print(N)
+                self.vessel_size = N
                 continue
-            
+
             # Process the next N lines for details on each vessel
             if N > 0:
                 vessel_info = list(map(int, line.split()))
@@ -37,109 +39,127 @@ class BAProblem(search.Problem):
         # Initialize berths once all vessels have been processed
         self.berths = [[] for _ in range(self.berth_size)]
 
+        berth_array = np.zeros(self.berth_size)
+        berth_array[2]=1
+        vessels_array = np.zeros(self.vessel_size)
+        time = 0
+
+        for i in range(len(vessels_array)):
+            if self.vessels[i][0] == time:
+                    vessels_array[i] = -1
+            else:
+                vessels_array[i] = -2
+
         # Initial state: convert berths and vessels to tuples for immutability
-        self.initial = self.hashable_state((tuple(map(tuple, self.berths)), tuple(self.vessels)))
+        self.initial = tuple((tuple(berth_array), tuple(vessels_array), time))
 
-
-    def hashable_state(self, state):
-        """Convert state to a hashable representation."""
-        berths, vessels = state
-        # Convert lists to tuples
-        return (tuple(map(tuple, berths)), tuple(map(tuple, vessels)))  # Convert to hashable tuples
+        self.weights = [row[3] for row in self.vessels]
 
 
     ## Parte 2
     def result(self, state, action):
         """Returns the new state resulting from applying the given action to the current state."""
-        berths, vessels = state  # Unpack the state tuple
-        new_berths = [list(berth) for berth in berths]  # Deep copy of berth availability
-        new_vessels = list(vessels)  # Deep copy of remaining vessels
-
-        if action[0] == "process":
-            berth_index, start_time, vessel_index = action[1], action[2], action[3]
-            
-            vessel = new_vessels[vessel_index]
-            processing_time = vessel[1]
-            size = vessel[2]
-            
-            for i in range(size):
-                new_berths[berth_index + i].append((start_time, start_time + processing_time))
-            
-            new_vessels.pop(vessel_index)  # Remove the scheduled vessel
-        
-        elif action[0] == "wait":
-            # No changes to the state if the vessel is waiting
-            pass
-        
-        # Return new state as a tuple
-        return self.hashable_state((tuple(map(tuple, new_berths)), tuple(new_vessels)))
+        return action
 
 
     def actions(self, state):
+        print("State: ", state)
         """Returns the list of actions that can be executed in the given state."""
-        available_actions = []
-        berths, vessels = state  # Unpack the state tuple
-        vessels = list(vessels)  # Convert to a mutable list
+        action_list = []
+        # Extract the current state information
+        berth_array, vessels_array, time = state
+        
+        # Calculate the cost of the action
 
-        # Iterate through each unscheduled vessel
-        for vessel_index, vessel in enumerate(vessels):
-            arrival_time, processing_time, size = vessel[0], vessel[1], vessel[2]
+        berth_spaces = self.find_berth_spaces(state)
 
-            # Check all possible start times from the vessel's arrival time
-            for start_time in range(arrival_time, 100):  # Assuming 100 is the max time limit
-                # Try to assign the vessel to the required contiguous berths
-                for berth_index in range(self.berth_size - size + 1):  # Ensure enough contiguous berths
-                    if self.berth_is_available(berth_index, start_time, processing_time, size, berths):
-                        # If available, add the "process" action
-                        available_actions.append(("process", berth_index, start_time, vessel_index))
+        for berth_index, berth_size in berth_spaces:
+            print("berth_index: ", berth_index)
+            print("berth_size: ", berth_size)
+            for berth_index in range(berth_size):
+                print("\tberth_index: ", berth_index)
+                for vessel_index in range(self.vessel_size):
+                    print("\t\tvessel_index: ", vessel_index)
+                    vessel_copy = list(vessels_array)
+                    if vessel_copy[vessel_index] != -1:
+                        continue
+                    if (berth_size - berth_index) >= self.vessels[vessel_index][2]:
+                        # Create a new state based on the action
+                        # Actualizes the vessel array with a possible vessel mooring
+                        berth_copy = list(berth_array)
+                        for berth_index_copy in range(berth_size - berth_index):
+                            print("\t\t\tberth_copy[berth_index_copy]: ", berth_copy[berth_index_copy])
+                            print("\t\t\tself.vessels[vessel_index][1]: ", self.vessels[vessel_index][1])
+                            berth_copy[berth_index_copy] = self.vessels[vessel_index][1]
+                        vessel_copy[vessel_index] = self.vessels[vessel_index][1]
+                        new_state = tuple((tuple(berth_copy), tuple(vessel_copy), time))
+                        action_list.append(new_state)
+                        print("\t\tNew State: ", new_state)
 
-            # If no "process" action is available, we can only "wait"
-            if not any(action[0] == "process" and action[3] == vessel_index for action in available_actions):
-                available_actions.append(("wait", vessel_index))
-        print("Available actions: ", available_actions)
-        return available_actions
+        berth_copy = list(berth_array)
+        vessel_copy = list(vessels_array)
+        # Remove one in every value of berth_copy
+        for i in range(len(berth_copy)):
+            if berth_copy[i] != 0:
+                berth_copy[i] -= 1
+
+        for i in range(len(vessel_copy)):
+            if vessel_copy[i] == -2:
+                if self.vessels[i][0] == time + 1:
+                    vessel_copy[i] = -1
+            elif vessel_copy[i] > 0:
+                vessel_copy[i] -= 1
+        
+        new_state = tuple((tuple(berth_copy), tuple(vessel_copy), time+1))
+        action_list.append(new_state)
+        print("New State: ", new_state)
+        return tuple(action_list)
 
 
-    def berth_is_available(self, berth_index, start_time, processing_time, size, berths):
-        #print("Entrou no berth_is_available\n")
-        # Check if all berths from berth_index to berth_index + size - 1 are free
-        for i in range(size):
-            berth = berths[berth_index + i]
-            # Check for overlaps with existing scheduled vessels
-            for occupied_time in berth:
-                if start_time < occupied_time[1] and start_time + processing_time > occupied_time[0]:
-                    return False  # There is an overlap, so this berth is not available
-        return True  # All berths are available
+    # comentar
+    def find_berth_spaces(self, state):
+        berth_array, vessels_array, time = state
+        berth_spaces = []
+        berth_index = -1
+        print("Berth Array: ", berth_array)
+        for i in range(self.berth_size):
+            if berth_array[i] == 0 and berth_index == -1:
+                berth_index = i
+            if berth_array[i] != 0 and berth_index != -1:
+                berth_spaces.append((berth_index, i - berth_index))
+                berth_index = -1
+            if berth_array[i] == 0 and i == self.berth_size - 1:
+                if  berth_index != -1:
+                    berth_spaces.append((berth_index, i - berth_index + 1))
+                    berth_index = -1
+                else:
+                    berth_spaces.append((i, 1))
+
+        print("Berth Spaces: ", berth_spaces)
+        return berth_spaces
 
 
     def goal_test(self, state):
         print("Entrou no goal_test\n")
-        """Returns True if all vessels have been scheduled."""
-        _, vessels = state  # Unpack the state tuple
-        print("Number of vessels: ", len(vessels))
-        print("Vessels: ", vessels)
-        return len(vessels) == 0  # True if no remaining vessels
+        print("State: ", state)
+        berth_array, vessels_array, time = state
+        mask = (np.array(vessels_array) != 0)
+        if np.sum(mask) == 0:
+            return True
+        else:
+            return False
 
 
     def path_cost(self, c, state1, action, state2):
-        #print("Entrou no path_cost\n")
-        """Calculate the cost of the path from state1 to state2 via action."""
-        new_cost = c
-        if action[0] == "process":
-            berth_index, start_time, vessel_index = action[1], action[2], action[3]
-            
-            vessel = state2[1][vessel_index]  # Access vessels from the new state tuple
-            arrival_time = vessel[0]
-            processing_time = vessel[1]
-            weight = vessel[3]
-            
-            departure_time = start_time + processing_time
-            flow_time = departure_time - arrival_time
-            weighted_flow_time = flow_time * weight
-            
-            new_cost += weighted_flow_time
-        
-        return new_cost
+        print("Entrou no path_cost\n")
+        berth_array1, vessels_array1, time1 = state1
+        berth_array2, vessels_array2, time2 = state2
+        # Check what vessels left in state2 and create a mask for the one who dind't 
+        # Search for 2's in an array
+        mask = (np.array(vessels_array2) != -2) & (np.array(vessels_array2) != 0)
+        # Calculate the cost of the action
+        weighted_time = np.sum(self.weights*mask)*(time2 - time1)
+        return c + weighted_time
 
 
     def solve(self):
@@ -156,14 +176,33 @@ class BAProblem(search.Problem):
             return None
 
         # Extract the solution (actions) from the solution node
-        solution = solution_node.solution()  # This gives the list of actions that led to the goal
-        
+        solution_actions = solution_node.solution()  # This gives the list of actions that led to the goal
+        solution = [[0, 0] for _ in range(self.vessel_size)]
         # Print the solution actions (how vessels were scheduled)
-        print("\nSolution Actions: ", solution)
-        
+        print("\nSolution Actions: ", solution_actions)
+        for berth_array, vessels_array, time in solution_actions:
+            if (berth_copy == None):
+                berth_copy = berth_array
+                vessels_copy = vessels_array
+            for j in range(self.berth_size):
+                if (berth_copy[i] != berth_array[i]) and berth_copy[i] == 0:
+                    for i in range(len(vessels_array)):
+                        #checkar se colocou um vessel nesta ação
+                        if (vessels_copy[i] != vessels_array[i]) and vessels_copy[i] == -1:
+                                vessels_array[i] = -1
+                                solution[i][0]=j
+                                solution[i][1]=time
+                                continue
+
+
+
+
         # Extract the final path cost from the solution node (total weighted flow time)
         total_cost = solution_node.path_cost
         print("\nTotal Cost (Weighted Flow Time): ", total_cost)
+
+        # Return the final path based on the solution given by the algorithm
+        #TODO: This is just a placeholder, replace with the actual solution
         
         return solution
 
