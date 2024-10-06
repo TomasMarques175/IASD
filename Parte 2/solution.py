@@ -1,6 +1,8 @@
 import search
 import numpy as np
 import ast
+from datetime import datetime
+
 
 class BAProblem(search.Problem):
     def __init__(self):
@@ -11,6 +13,14 @@ class BAProblem(search.Problem):
         self.vessel_size = None
         self.berths = None
         self.vessels = []
+        self.debug_mode = True  # Set this to False to disable debug prints
+        self.bomb = 0
+
+
+    def debug_print(self, message):
+        """Prints a message if debug_mode is enabled."""
+        if self.debug_mode:
+            print(message)
 
     def load(self, fh):
         N = None
@@ -25,8 +35,6 @@ class BAProblem(search.Problem):
             # The first non-comment line should contain berth size and number of vessels
             if self.berth_size is None and N is None:
                 self.berth_size, N = map(int, line.split())
-                print(self.berth_size)
-                print(N)
                 self.vessel_size = N
                 continue
 
@@ -40,7 +48,6 @@ class BAProblem(search.Problem):
         self.berths = [[] for _ in range(self.berth_size)]
 
         berth_array = np.zeros(self.berth_size)
-        berth_array[2]=1
         vessels_array = np.zeros(self.vessel_size)
         time = 0
 
@@ -63,7 +70,6 @@ class BAProblem(search.Problem):
 
 
     def actions(self, state):
-        print("State: ", state)
         """Returns the list of actions that can be executed in the given state."""
         action_list = []
         # Extract the current state information
@@ -74,27 +80,22 @@ class BAProblem(search.Problem):
         berth_spaces = self.find_berth_spaces(state)
 
         for berth_index, berth_size in berth_spaces:
-            print("berth_index: ", berth_index)
-            print("berth_size: ", berth_size)
-            for berth_index in range(berth_size):
-                print("\tberth_index: ", berth_index)
+            for berth_index1 in range(berth_size):
                 for vessel_index in range(self.vessel_size):
-                    print("\t\tvessel_index: ", vessel_index)
                     vessel_copy = list(vessels_array)
                     if vessel_copy[vessel_index] != -1:
                         continue
-                    if (berth_size - berth_index) >= self.vessels[vessel_index][2]:
+                    elif (berth_size - berth_index1) >= self.vessels[vessel_index][2]:
                         # Create a new state based on the action
                         # Actualizes the vessel array with a possible vessel mooring
                         berth_copy = list(berth_array)
-                        for berth_index_copy in range(berth_size - berth_index):
-                            print("\t\t\tberth_copy[berth_index_copy]: ", berth_copy[berth_index_copy])
-                            print("\t\t\tself.vessels[vessel_index][1]: ", self.vessels[vessel_index][1])
-                            berth_copy[berth_index_copy] = self.vessels[vessel_index][1]
+
+                        for berth_index_copy in range(berth_size - berth_index1):
+                            berth_copy[berth_index_copy + berth_index] = self.vessels[vessel_index][1]
+                            
                         vessel_copy[vessel_index] = self.vessels[vessel_index][1]
                         new_state = tuple((tuple(berth_copy), tuple(vessel_copy), time))
                         action_list.append(new_state)
-                        print("\t\tNew State: ", new_state)
 
         berth_copy = list(berth_array)
         vessel_copy = list(vessels_array)
@@ -112,37 +113,59 @@ class BAProblem(search.Problem):
         
         new_state = tuple((tuple(berth_copy), tuple(vessel_copy), time+1))
         action_list.append(new_state)
-        print("New State: ", new_state)
+
         return tuple(action_list)
 
 
-    # comentar
+    """ def find_berth_spaces1(self, state):
+        berth_array, vessels_array, time = state
+        berth_spaces = []
+        berth_index = -1
+        for i in range(self.berth_size):
+            
+            if berth_array[i] == 0 and berth_index == -1:
+                berth_index = i
+            
+            elif berth_array[i] != 0 and berth_index != -1:
+                berth_spaces.append((berth_index, i - berth_index))
+                berth_index = -1
+            
+            elif berth_array[i] == 0 and i == self.berth_size - 1:
+                if  berth_index != -1:
+                    berth_spaces.append((berth_index, i - berth_index + 1))
+                else:
+                    berth_spaces.append((i, 1))
+                berth_index = -1
+        #self.debug_print(f"Berth Spaces: " + str(berth_spaces))
+        return berth_spaces """
+
+
     def find_berth_spaces(self, state):
         berth_array, vessels_array, time = state
         berth_spaces = []
         berth_index = -1
-        print("Berth Array: ", berth_array)
-        for i in range(self.berth_size):
-            if berth_array[i] == 0 and berth_index == -1:
-                berth_index = i
-            if berth_array[i] != 0 and berth_index != -1:
-                berth_spaces.append((berth_index, i - berth_index))
-                berth_index = -1
-            if berth_array[i] == 0 and i == self.berth_size - 1:
-                if  berth_index != -1:
-                    berth_spaces.append((berth_index, i - berth_index + 1))
-                    berth_index = -1
-                else:
-                    berth_spaces.append((i, 1))
+        i = 0
+        while i < self.berth_size:
+            if berth_array[i] == 0:  # Found an occupied berth
+                start_index = i
+                count = 0
 
-        print("Berth Spaces: ", berth_spaces)
+                # Count contiguous occupied berths
+                while i < self.berth_size and berth_array[i] == 0:
+                    count += 1
+                    i += 1
+
+                # Add the start index and the number of contiguous occupied berths
+                berth_spaces.append((start_index, count))
+            else:
+                i += 1
         return berth_spaces
 
 
+
+
     def goal_test(self, state):
-        print("Entrou no goal_test\n")
-        print("State: ", state)
-        berth_array, vessels_array, time = state
+        _, vessels_array, _ = state
         mask = (np.array(vessels_array) != 0)
         if np.sum(mask) == 0:
             return True
@@ -151,7 +174,6 @@ class BAProblem(search.Problem):
 
 
     def path_cost(self, c, state1, action, state2):
-        print("Entrou no path_cost\n")
         berth_array1, vessels_array1, time1 = state1
         berth_array2, vessels_array2, time2 = state2
         # Check what vessels left in state2 and create a mask for the one who dind't 
@@ -163,47 +185,74 @@ class BAProblem(search.Problem):
 
 
     def solve(self):
-        print("Entrou no solve\n")
+        # Start time
+
+        self.debug_print("Solving the problem...")
         """Calls the uniform_cost_search method from the search module.
         Returns a solution using the specified format."""
         
         # Call the uniform_cost_search method from the search module
         solution_node = search.uniform_cost_search(self)
         
+        start_time = datetime.now()
+        
         # Check if a solution was found
         if solution_node is None:
-            print("No solution found.")
+            self.debug_print("No solution found.")
             return None
 
         # Extract the solution (actions) from the solution node
         solution_actions = solution_node.solution()  # This gives the list of actions that led to the goal
-        solution = [[0, 0] for _ in range(self.vessel_size)]
+        solution = [[-1, -1] for _ in range(self.vessel_size)]
+
         # Print the solution actions (how vessels were scheduled)
-        print("\nSolution Actions: ", solution_actions)
+        for action_num, action in enumerate(solution_actions):
+            self.debug_print("Action {}: {}".format(action_num, action))
+
+        break_flag = False
+        primeira_flag = True
         for berth_array, vessels_array, time in solution_actions:
-            if (berth_copy == None):
-                berth_copy = berth_array
-                vessels_copy = vessels_array
-            for j in range(self.berth_size):
-                if (berth_copy[i] != berth_array[i]) and berth_copy[i] == 0:
-                    for i in range(len(vessels_array)):
-                        #checkar se colocou um vessel nesta ação
-                        if (vessels_copy[i] != vessels_array[i]) and vessels_copy[i] == -1:
-                                vessels_array[i] = -1
-                                solution[i][0]=j
-                                solution[i][1]=time
-                                continue
-
-
-
-
+            if (primeira_flag):
+                primeira_flag = False
+                for j in range(self.berth_size):
+                    if(break_flag):
+                        break_flag = False
+                        break
+                    if berth_array[j] > 0:
+                        for i in range(len(vessels_array)):
+                            #checkar se colocou um vessel nesta acao
+                            if vessels_array[i] > 0:
+                                    self.debug_print("Time1 {}: {}".format(action_num, time))
+                                    solution[i][0]=time
+                                    solution[i][1]=j
+                                    break_flag = True
+                                    break
+            else:
+                for j in range(self.berth_size):
+                    if(break_flag):
+                        break_flag = False
+                        break
+                    if (berth_copy[j] != berth_array[j]) and berth_copy[j] == 0:
+                        for i in range(len(vessels_array)):
+                            #checkar se colocou um vessel nesta acao
+                            if (vessels_copy[i] != vessels_array[i]) and vessels_copy[i] == -1:
+                                self.debug_print("Time2 {}: {}".format(action_num, time))
+                                solution[i][0]=time
+                                solution[i][1]=j
+                                if(j != self.berth_size - 1):
+                                    break_flag = True
+                                break
+            berth_copy = berth_array
+            vessels_copy = vessels_array
+        print(solution)
         # Extract the final path cost from the solution node (total weighted flow time)
         total_cost = solution_node.path_cost
-        print("\nTotal Cost (Weighted Flow Time): ", total_cost)
+        self.debug_print("\nTotal Cost (Weighted Flow Time): {}".format(total_cost))
 
-        # Return the final path based on the solution given by the algorithm
-        #TODO: This is just a placeholder, replace with the actual solution
-        
+        end_time = datetime.now()
+        elapsed_time = end_time - start_time
+        self.debug_model("Total Cost (Elapsed Time): {}".format(elapsed_time))
+
         return solution
 
 
@@ -282,7 +331,7 @@ class BAProblem(search.Problem):
 
 def main():
     baproblem = BAProblem()
-    input_file_path = 'Tests/ey100.dat'  # Adjust the path as needed
+    input_file_path = 'Tests/ey108.dat'  # Adjust the path as needed
 
     try:
         with open(input_file_path, 'r') as file:
