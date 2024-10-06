@@ -1,7 +1,7 @@
 import search
 import numpy as np
 import ast
-
+###xdazasd
 class BAProblem(search.Problem):
     def __init__(self):
         # global variables initialization
