@@ -76,26 +76,30 @@ class BAProblem(search.Problem):
         berth_array, vessels_array, time = state
         
         # Calculate the cost of the action
-
+        start_time = datetime.now()
         berth_spaces = self.find_berth_spaces(state)
 
-        for berth_index, berth_size in berth_spaces:
-            for berth_index1 in range(berth_size):
-                for vessel_index in range(self.vessel_size):
-                    vessel_copy = list(vessels_array)
-                    if vessel_copy[vessel_index] != -1:
-                        continue
-                    elif (berth_size - berth_index1) >= self.vessels[vessel_index][2]:
-                        # Create a new state based on the action
-                        # Actualizes the vessel array with a possible vessel mooring
-                        berth_copy = list(berth_array)
+        for vessel_index in range(self.vessel_size):
+            for berth_index, berth_size in berth_spaces:
+                if (berth_size < self.vessels[vessel_index][2]):
+                    continue
+                vessel_copy = list(vessels_array)
+                if vessel_copy[vessel_index] != -1:
+                    continue
+                for berth_index1 in range(berth_size):
+                    if (berth_size - berth_index1) < self.vessels[vessel_index][2]:
+                        break
 
-                        for berth_index_copy in range(berth_size - berth_index1):
-                            berth_copy[berth_index_copy + berth_index] = self.vessels[vessel_index][1]
-                            
-                        vessel_copy[vessel_index] = self.vessels[vessel_index][1]
-                        new_state = tuple((tuple(berth_copy), tuple(vessel_copy), time))
-                        action_list.append(new_state)
+                    # Create a new state based on the action
+                    # Actualizes the vessel array with a possible vessel mooring
+                    berth_copy = list(berth_array)
+
+                    for berth_index_copy in range(berth_size - berth_index1):
+                        berth_copy[berth_index_copy + berth_index] = self.vessels[vessel_index][1]
+
+                    vessel_copy[vessel_index] = self.vessels[vessel_index][1]
+                    new_state = tuple((tuple(berth_copy), tuple(vessel_copy), time))
+                    action_list.append(new_state)
 
         berth_copy = list(berth_array)
         vessel_copy = list(vessels_array)
@@ -104,6 +108,9 @@ class BAProblem(search.Problem):
             if berth_copy[i] != 0:
                 berth_copy[i] -= 1
 
+        """ mask = berth_copy != 0
+        berth_copy[mask] -= 1 """
+
         for i in range(len(vessel_copy)):
             if vessel_copy[i] == -2:
                 if self.vessels[i][0] == time + 1:
@@ -111,9 +118,19 @@ class BAProblem(search.Problem):
             elif vessel_copy[i] > 0:
                 vessel_copy[i] -= 1
         
+        """ mask_1 = vessel_copy == -2
+        mask_2 = self.vessels[mask_1][0] == (time + 1)
+        vessel_copy[mask_2] -= 1
+        mask_1 = vessel_copy != -2
+        mask_3 = vessel_copy[mask_1] > 0
+        vessel_copy[mask_3] -= 1 """
+        
         new_state = tuple((tuple(berth_copy), tuple(vessel_copy), time+1))
         action_list.append(new_state)
-
+        #
+        end_time = datetime.now()
+        elapsed_time = end_time - start_time
+        self.debug_print("Total Cost (Elapsed Time): {}".format(elapsed_time))
         return tuple(action_list)
 
 
@@ -179,8 +196,10 @@ class BAProblem(search.Problem):
         # Check what vessels left in state2 and create a mask for the one who dind't 
         # Search for 2's in an array
         mask = (np.array(vessels_array2) != -2) & (np.array(vessels_array2) != 0)
+        # mask1 = (np.array(vessels_array1) != -2) & (np.array(vessels_array1) != 0)
         # Calculate the cost of the action
         weighted_time = np.sum(self.weights*mask)*(time2 - time1)
+        #weighted_time = np.sum(self.weights*(mask2-mask1))
         return c + weighted_time
 
 
@@ -190,10 +209,15 @@ class BAProblem(search.Problem):
         self.debug_print("Solving the problem...")
         """Calls the uniform_cost_search method from the search module.
         Returns a solution using the specified format."""
-        
+        start_time = datetime.now()
+
         # Call the uniform_cost_search method from the search module
         solution_node = search.uniform_cost_search(self)
         
+        end_time = datetime.now()
+        elapsed_time = end_time - start_time
+        self.debug_print("Total Cost solution_node (Elapsed Time): {}".format(elapsed_time))
+
         start_time = datetime.now()
         
         # Check if a solution was found
@@ -247,11 +271,10 @@ class BAProblem(search.Problem):
         print(solution)
         # Extract the final path cost from the solution node (total weighted flow time)
         total_cost = solution_node.path_cost
-        self.debug_print("\nTotal Cost (Weighted Flow Time): {}".format(total_cost))
 
         end_time = datetime.now()
         elapsed_time = end_time - start_time
-        self.debug_model("Total Cost (Elapsed Time): {}".format(elapsed_time))
+        self.debug_print("Total Cost (Elapsed Time): {}".format(elapsed_time))
 
         return solution
 
