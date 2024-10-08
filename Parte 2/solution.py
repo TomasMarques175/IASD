@@ -14,8 +14,6 @@ class BAProblem(search.Problem):
         self.berths = None
         self.vessels = []
         self.debug_mode = True  # Set this to False to disable debug prints
-        self.bomb = 0
-
 
     def debug_print(self, message):
         """Prints a message if debug_mode is enabled."""
@@ -25,6 +23,11 @@ class BAProblem(search.Problem):
     def load(self, fh):
         """Loads a BAP problem from the file object fh.
         It may initialize self.initial here"""
+
+        """ file_name = fh.name.split('/')[-1]  # Extract the file name
+        if file_name == "ey108.dat":
+            self.debug_print(f"Loading file: {file_name}")"""
+
         N = None
 
         # Read the file line by line
@@ -50,7 +53,6 @@ class BAProblem(search.Problem):
         self.berths = [[] for _ in range(self.berth_size)]
 
         berth_array = np.zeros(self.berth_size)
-        #berth_array[2]=1
         vessels_array = np.zeros(self.vessel_size)
         time = 0
 
@@ -64,7 +66,9 @@ class BAProblem(search.Problem):
         self.initial = tuple((tuple(berth_array), tuple(vessels_array), time))
 
         self.weights = [row[3] for row in self.vessels]
-
+        vessel_sizes = [vessel[2] for vessel in self.vessels]
+        # Find the minimum size
+        self.min_vessel_size = min(vessel_sizes)
 
     ## Parte 2
     def result(self, state, action):
@@ -88,7 +92,6 @@ class BAProblem(search.Problem):
         vessel_copy = list(vessels_array)
 
         if vessel_index == -1:
-            
             # If vessel_index is -1, update the state based on time
             # Remove one from every non-zero value in berth_copy
             for i in range(len(berth_copy)):
@@ -104,9 +107,7 @@ class BAProblem(search.Problem):
                     vessel_copy[i] -= 1
             # Create the new state with updated values
             new_state = (tuple(berth_copy), tuple(vessel_copy), time + 1)
-
         else:
-            
             # If vessel_index is valid, update based on the specified vessel
             # Update the berth array for the specified vessel
             for berth_index_copy in range(self.vessels[vessel_index][2]):
@@ -114,27 +115,25 @@ class BAProblem(search.Problem):
 
             # Update the vessel array for the specified vessel
             vessel_copy[vessel_index] = self.vessels[vessel_index][1]
+
             # Create the new state with updated values
             new_state = (tuple(berth_copy), tuple(vessel_copy), time)
-        
-        
+
         return new_state
 
     def actions(self, state):
         """Returns the list of actions that can be executed in the given state."""
         action_list = []
         # Extract the current state information
-        berth_array, vessels_array, time = state
-        
-
+        _, vessels_array, _ = state
         berth_spaces = self.find_berth_spaces(state)
+        #self.debug_print(f"Berth spaces: {berth_spaces}")
 
         for vessel_index in range(self.vessel_size):
+            if vessels_array[vessel_index] != -1:
+                continue
             for berth_index, berth_size in berth_spaces:
                 if (berth_size < self.vessels[vessel_index][2]):
-                    continue
-                vessel_copy = list(vessels_array)
-                if vessel_copy[vessel_index] != -1:
                     continue
                 for berth_index1 in range(berth_size):
                     if (berth_size - berth_index1) < self.vessels[vessel_index][2]:
@@ -142,14 +141,9 @@ class BAProblem(search.Problem):
                     new_state = (vessel_index, berth_index + berth_index1)
                     action_list.append(new_state)
 
-        
-        
         new_state = (-1, 1)
         action_list.append(new_state)
-        #
 
-
-        #self.debug_print("Total Cost (Elapsed Time): {}".format(elapsed_time))
         return tuple(action_list)
 
     def find_berth_spaces(self, state):
@@ -173,40 +167,44 @@ class BAProblem(search.Problem):
                 i += 1
         return berth_spaces
 
-
     def goal_test(self, state):
         """Returns True if the state is a goal"""
-        berth_array, vessels_array, time = state
+        _, vessels_array, _ = state
         mask = (np.array(vessels_array) != 0)
         if np.sum(mask) == 0:
             return True
         else:
             return False
 
-
     def path_cost(self, c, state1, action, state2):
-        print("path_cost")
-        berth_array1, vessels_array1, time1 = state1
-        berth_array2, vessels_array2, time2 = state2
+        _, vessels_array1, time1 = state1
+        _, vessels_array2, time2 = state2
         # Check what vessels left in state2 and create a mask for the one who dind't 
+        
+        if time1 == time2:
+            return c
 
-        mask = (np.array(vessels_array2) != -2) & (np.array(vessels_array2) != 0)
-        #mask2 = (np.array(vessels_array2) == 1)
-        #mask1 = (np.array(vessels_array1) == 1)
+        mask = (np.array(vessels_array1) != 0) & ((np.array(vessels_array2) != -2) & ((np.array(vessels_array1) != 1) & (np.array(vessels_array2) != 0)))
+
         # Calculate the cost of the action
-        
-        weighted_time = np.sum(self.weights*mask)*(time2 - time1)
+        total_cost = c + np.sum(self.weights*mask)*(time2 - time1)
 
-        # ajuda = np.sum(self.weights*(mask1-mask2))
-        
-        return c + weighted_time
+        """ if total_cost != (c + weighted_time):
+            if time1 != time2:
+                print("\nOld cost: " + str(c))
+                print("Total cost1: " + str(c + weighted_time))
+                print("Total cost2: " + str(total_cost))
+                self.debug_print("Mask: " + str(mask))
+                self.debug_print("vessel 1: " + str(vessels_array1) + "\nVessel 2:" + str(vessels_array2))
+                self.debug_print("Weighted time: " + str(self.weights)) """
 
+        return total_cost
 
     def solve(self):
-
         # Call the uniform_cost_search method from the search module
         
         solution_node = search.uniform_cost_search(self)
+        #solution_node = search.depth_limited_search(self, 10000)
 
         # Extract the solution (actions) from the solution node
         solution_actions = solution_node.solution()  # This gives the list of actions that led to the goal
@@ -222,9 +220,8 @@ class BAProblem(search.Problem):
 
         # Extract the final path cost from the solution node (total weighted flow time)
         total_cost = solution_node.path_cost
-
+        self.debug_print("Total cost: " + str(total_cost))
         return solution
-
 
     ## Parte 1
     def load_sol(self, fhs):
@@ -236,7 +233,6 @@ class BAProblem(search.Problem):
             # Convert each tuple into a NumPy array
             sol = [np.array(t) for t in tuple_list]
         return tuple_list
-
 
     def cost(self, sol):
         total_cost = 0
@@ -255,7 +251,6 @@ class BAProblem(search.Problem):
             total_cost += flow_time * weight
         # Return the total cost 
         return total_cost
-
 
     def check(self, sol):
         # Creates a list with berth size
@@ -300,6 +295,9 @@ class BAProblem(search.Problem):
 
 
 def main():
+
+    start_time = datetime.now()
+
     baproblem = BAProblem()
     input_file_path = 'Tests/ey108.dat'  # Adjust the path as needed
 
@@ -323,6 +321,13 @@ def main():
         print("\nSolution actions:", solution)
     else:
         print("\nNo solution was found.")
+
+    # End time
+    end_time = datetime.now()
+
+    # Calculate the elapsed time
+    elapsed_time = end_time - start_time
+    print(f"Execution time: {elapsed_time}\n")
 
 
 if __name__=='__main__':
