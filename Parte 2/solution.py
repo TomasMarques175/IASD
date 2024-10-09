@@ -172,6 +172,7 @@ class BAProblem(search.Problem):
         _, vessels_array, _ = state
         mask = (np.array(vessels_array) != 0)
         if np.sum(mask) == 0:
+            self.debug_print("Goal reached")
             return True
         else:
             return False
@@ -184,19 +185,16 @@ class BAProblem(search.Problem):
         if time1 == time2:
             return c
 
-        mask = (np.array(vessels_array1) != 0) & ((np.array(vessels_array2) != -2) & ((np.array(vessels_array1) != 1) & (np.array(vessels_array2) != 0)))
-
+        mask = (np.array(vessels_array1) != -2) & (np.array(vessels_array1) != 0)
+        
         # Calculate the cost of the action
         total_cost = c + np.sum(self.weights*mask)*(time2 - time1)
-
-        """ if total_cost != (c + weighted_time):
-            if time1 != time2:
-                print("\nOld cost: " + str(c))
-                print("Total cost1: " + str(c + weighted_time))
-                print("Total cost2: " + str(total_cost))
-                self.debug_print("Mask: " + str(mask))
-                self.debug_print("vessel 1: " + str(vessels_array1) + "\nVessel 2:" + str(vessels_array2))
-                self.debug_print("Weighted time: " + str(self.weights)) """
+        #print("Total cost2: " + str(total_cost))
+        if time1 != time2:
+            self.debug_print("Total cost: " + str(total_cost))
+            self.debug_print("Mask: " + str(mask))
+            self.debug_print("vessel 1: " + str(vessels_array1) + "\nVessel 2:" + str(vessels_array2))
+            self.debug_print("Weighted time: " + str(self.weights))
 
         return total_cost
 
@@ -204,7 +202,7 @@ class BAProblem(search.Problem):
         # Call the uniform_cost_search method from the search module
         
         solution_node = search.uniform_cost_search(self)
-        #solution_node = search.depth_limited_search(self, 10000)
+        # solution_node = search.depth_limited_search(self)
 
         # Extract the solution (actions) from the solution node
         solution_actions = solution_node.solution()  # This gives the list of actions that led to the goal
