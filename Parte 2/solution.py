@@ -6,13 +6,11 @@ from datetime import datetime
 class State:
     def __init__(self, solution):
         self.solution = tuple(solution)  # Tuples are immutable
-
+        self.unique = 0
         for index in range(len(solution)):
-            if index < len(solution):
-                self.unique += solution[index][0]*(100**(index))
-            if index < len(solution):
-                self.unique += (solution[index][1])*(100**(index+len(solution)))
-
+            self.unique += (1 + solution[index][0]) * (100 ** index)
+            self.unique += (1 + solution[index][1]) * (100 ** (index + len(solution)))
+        
         self._hash = hash(self.unique)
 
     def __eq__(self, other):
@@ -26,7 +24,7 @@ class State:
 
     def __repr__(self):
         """For debugging purposes, returns a string representation of the state."""
-        return f"State(berths={self.berth_array}, vessels={self.vessels_array}, time={self.time})"
+        return "State(berths={self.solution})"
 
     def __lt__(self, other):
         # Compare states based on time, or some other criteria for PriorityQueue
@@ -88,92 +86,107 @@ class BAProblem(search.Problem):
         # Find the minimum size
         self.min_vessel_size = min(vessel_sizes)
 
-    ## Parte 2
     def result(self, state, action):
         vessel_index, time, berth_index = action
-        state.solution[vessel_index][1] = berth_index
-        state.solution[vessel_index][0] = time
 
-        return State(action)
+        solucao = [list(v) for v in state.solution]
+
+        # Atualiza os valores com base na ação
+        solucao[vessel_index][1] = berth_index  # Atualiza o indice do berth
+        solucao[vessel_index][0] = time         # Atualiza o tempo
+
+        # Retorna um novo objeto State com a solução modificada
+        return State(solucao)
 
     def actions(self, state):
         """Returns the list of actions that can be executed in the given state."""
         action_list = []
-        # Extract the current state information
         
-        self.debug_print("Vessels array: " + str(vessels_array))
-        vessels_array = state.solution
+        # Extract the current state information
+        vessels_array = [list(v) for v in state.solution]  # Deep copy to avoid modifying the original state
+        #self.debug_print("vessels_array: " + str(vessels_array) + "\n")
         for vessel_index in range(self.vessel_size):
-            vessels_array = state.solution
-            flag = 1
-            if vessels_array[vessel_index][1] != -1:
+            if vessels_array[vessel_index][1] != -1:  # Vessel already assigned, skip
                 continue
-            vessels_array[vessel_index][0] = self.vessels[vessel_index][0]
-            while(flag): 
-                for berth_index in range(len(self.berth_size)):
-                    vessels_array[vessel_index][1] = berth_index
-                    if(self.check(vessels_array)):
-                        action_list.append(vessel_index, vessels_array[vessel_index][0], berth_index)
-                        flag = 0
-                        break
-                    
+            vessels_array = [list(v) for v in state.solution]
+            #print("\n",vessels_array)
+            
+            # Initialize vessel start time with its original value
+            start_time = self.vessels[vessel_index][0]
+            vessels_array[vessel_index][0] = start_time
 
+            # Try assigning the vessel to a berth
+            while True:
+                #self.debug_print("State3: " + str(state.solution) + "\n")
+                for berth_index in range(self.berth_size):
+                    vessels_array[vessel_index][1] = berth_index  # Try assigning this berth
+                    
+                    # Check if this action is valid
+                    if self.check_action(vessels_array):
+                        action_list.append((vessel_index, start_time, berth_index))
+                        break  # Stop trying further berths for this vessel
+                else:
+                    # If no valid berth was found in this iteration, increment the start time
+                    start_time += 1
+                    vessels_array[vessel_index][0] = start_time
+                    continue  # Retry with new start time
+                break  # Break the outer while when an action is found
+
+        #self.debug_print("State4: " + str(state.solution) + "\n")
         return tuple(action_list)
 
-def check_action(self, sol, action):
+    def check_action(self, sol):
         # Creates a list with berth size
         vessels_times = [[] for _ in range(self.berth_size)]
-        vessel_index, time, berth_index = action
+        for i in range(len(sol)):
+            if sol[i][0] == -1 or sol[i][1] == -1:
+                continue
 
-        # Checks if the mooring time in the output comes before the arrival
-        # time
-        if sol[vessel_index][0] < self.vessels[vessel_index][0]:
-            return False
-        
-        # Checks if the last berth utilized by the vessel is greater than 
-        # the berth size
-        if sol[vessel_index][1]+self.vessels[i][vessel_index] > self.berth_size:
-            return False
-        
-        # Checks each berth space utilized by the vessel
-        # This is done by trying to fill all the birth time spaces
-        for berth_index in range(self.vessels[i][2]):
-            for j in vessels_times[sol[vessel_index][1]+berth_index]:
-                if (
-                    # Checks if the berth is empty for all the time spaces
-                    j != None
-                    and
-                    # Checks if the arrival time and departure time 
-                    # intersect already ocupied times in this berth
-                    (
-                        (sol[vessel_index][0] >= j[0] and sol[vessel_index][0] <= j[1]) 
-                        or 
-                        (sol[vessel_index][0]+self.vessels[vessel_index][1]-1 >= j[0] and sol[vessel_index][0]+self.vessels[vessel_index][1]-1 <= j[1])
-                    )
-                    or
-                    # Checks if the berth is being ocupied from arrival time 
-                    # till it departures for this vessel
-                    (
-                        sol[vessel_index][0] <= j[0] and sol[vessel_index][0]+self.vessels[vessel_index][1]-1 >= j[1])
-                    ):
-                    return False
-            # Updates the ocupied times for this berth space
-            times = [sol[vessel_index][0],sol[vessel_index][0]+self.vessels[vessel_index][1]-1]
-            vessels_times[sol[vessel_index][1]+berth_index].append(times)
+            # Checks if the mooring time in the output comes before the arrival
+            # time
+            if sol[i][0] < self.vessels[i][0]:
+                return False
+            
+            # Checks if the last berth utilized by the vessel is greater than 
+            # the berth size
+            if sol[i][1]+self.vessels[i][2] > self.berth_size:
+                return False
+            
+            # Checks each berth space utilized by the vessel
+            # This is done by trying to fill all the birth time spaces
+            for berth_index in range(self.vessels[i][2]):
+                for j in vessels_times[sol[i][1]+berth_index]:
+                    if (
+                        # Checks if the berth is empty for all the time spaces
+                        j != None
+                        and
+                        # Checks if the arrival time and departure time 
+                        # intersect already ocupied times in this berth
+                        (
+                            (sol[i][0] >= j[0] and sol[i][0] <= j[1]) 
+                            or 
+                            (sol[i][0]+self.vessels[i][1]-1 >= j[0] and sol[i][0]+self.vessels[i][1]-1 <= j[1])
+                        )
+                        or
+                        # Checks if the berth is being ocupied from arrival time 
+                        # till it departures for this vessel
+                        (
+                            sol[i][0] <= j[0] and sol[i][0]+self.vessels[i][1]-1 >= j[1])
+                        ):
+                        return False
+                # Updates the ocupied times for this berth space
+                times = [sol[i][0],sol[i][0]+self.vessels[i][1]-1]
+                vessels_times[sol[i][1]+berth_index].append(times)
         return True
-
-
 
     def goal_test(self, state):
         """Returns True if the state is a goal"""
         solution = state.solution
-        counter = 0
-        
-        
+
         for time, birth_index in solution:
-            if(time == -1):
-                counter +=1
-        return counte
+            if(time == -1 | birth_index == -1):
+                return False
+        return True
 
     def path_cost(self, c, state1, action, state2):
         vessel_index, time, _ = action
@@ -194,15 +207,14 @@ def check_action(self, sol, action):
         # Extract the solution (actions) from the solution node
         solution_actions = solution_node.solution()  # This gives the list of actions that led to the goal
         solution = [[-1, -1] for _ in range(self.vessel_size)]
+        self.debug_print("Solution actions: " + str(solution_actions) + "\n")
 
-        time=0
-        for vessels_index, birth_index in solution_actions:
-            if(vessels_index == -1):
-                time+=1
-            else:
-                solution[vessels_index][0]=time
-                solution[vessels_index][1]=birth_index
-
+        # Remove the initial value from solution_actions for all arrays
+        for action in solution_actions:
+            vessel_index, time, berth_index = action
+            # Atualiza a solução: o primeiro elemento é o tempo, o segundo é o índice do berço
+            solution[vessel_index] = [time, berth_index]
+        self.debug_print("Final solution: " + str(solution) + "\n")
         # Extract the final path cost from the solution node (total weighted flow time)
         total_cost = solution_node.path_cost
         return solution
@@ -253,7 +265,7 @@ def main():
     start_time = datetime.now()
 
     baproblem = BAProblem()
-    input_file_path = 'Tests/ey109.dat'  # Adjust the path as needed
+    input_file_path = 'Tests/ey108.dat'  # Adjust the path as needed
 
     try:
         with open(input_file_path, 'r') as file:
@@ -270,11 +282,6 @@ def main():
 
     # Proceed to solve the problem
     solution = baproblem.solve()
-
-    if solution:
-        print("\nSolution actions:", solution)
-    else:
-        print("\nNo solution was found.")
 
     # End time
     end_time = datetime.now()
