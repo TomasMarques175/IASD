@@ -4,18 +4,13 @@ import ast
 from datetime import datetime
 
 class State:
-    def __init__(self, berth_array, vessels_array, time):
-        self.berth_array = tuple(berth_array)  # Tuples are immutable
-        self.vessels_array = tuple(vessels_array)
-        self.time = time
-
-        self.unique = time
-        for index in range(max(len(berth_array), len(vessels_array))):
-            if index < len(berth_array):
-                self.unique += berth_array[index]*(100**(index + 1))
-            if index < len(vessels_array):
-                self.unique += (2 + vessels_array[index])*(100**(index+len(berth_array)+1))
-
+    def __init__(self, solution):
+        self.solution = tuple(solution)  # Tuples are immutable
+        self.unique = 0
+        for index in range(len(solution)):
+            self.unique += (1 + solution[index][0]) * (100 ** index)
+            self.unique += (1 + solution[index][1]) * (100 ** (index + len(solution)))
+        
         self._hash = hash(self.unique)
 
     def __eq__(self, other):
@@ -29,7 +24,7 @@ class State:
 
     def __repr__(self):
         """For debugging purposes, returns a string representation of the state."""
-        return f"State(berths={self.berth_array}, vessels={self.vessels_array}, time={self.time})"
+        return "State(berths={self.solution})"
 
     def __lt__(self, other):
         # Compare states based on time, or some other criteria for PriorityQueue
@@ -79,151 +74,108 @@ class BAProblem(search.Problem):
         # Initialize berths once all vessels have been processed
         self.berths = [[] for _ in range(self.berth_size)]
 
-        berth_array = np.zeros(self.berth_size)
-        vessels_array = np.zeros(self.vessel_size)
-        time = 0
 
-        for i in range(len(vessels_array)):
-            if self.vessels[i][0] == time:
-                    vessels_array[i] = -1
-            else:
-                vessels_array[i] = -2
+        # Create a list with (-1,-1) arrays with the size of the vessels
+        solution = [[-1, -1] for _ in range(len(self.vessels))]
 
         # Initial state: convert berths and vessels to tuples for immutability
-        self.initial = State(berth_array, vessels_array, time)
+        self.initial = State(solution)
 
         self.weights = [row[3] for row in self.vessels]
         vessel_sizes = [vessel[2] for vessel in self.vessels]
         # Find the minimum size
         self.min_vessel_size = min(vessel_sizes)
 
-    ## Parte 2
     def result(self, state, action):
-        """
-        Updates the state based on the action taken. 
-        If vessel_index == -1, it updates based on time.
-        Otherwise, it updates based on the specified vessel and berth index.
+        vessel_index, time, berth_index = action
 
-        Args:
-        - state: A tuple containing (berth_array, vessels_array, time).
-        - action: A tuple (vessel_index, berth_index).
+        solucao = [list(v) for v in state.solution]
 
-        Returns:
-        - new_state: The updated state after the action is applied.
-        """
-        berth_array = state.berth_array
-        vessels_array = state.vessels_array
-        time = state.time
-        vessel_index, berth_index = action
+        # Atualiza os valores com base na ação
+        solucao[vessel_index][1] = berth_index  # Atualiza o indice do berth
+        solucao[vessel_index][0] = time         # Atualiza o tempo
 
-        # Create copies of the arrays
-        berth_copy = list(berth_array)
-        vessel_copy = list(vessels_array)
-
-        if vessel_index == -1:
-            # If vessel_index is -1, update the state based on time
-            # Remove one from every non-zero value in berth_copy
-            for i in range(len(berth_copy)):
-                if berth_copy[i] != 0:
-                    berth_copy[i] -= 1
-
-            # Update vessel_copy based on time and current values
-            for i in range(len(vessel_copy)):
-                if vessel_copy[i] == -2:
-                    if self.vessels[i][0] == time + 1:
-                        vessel_copy[i] = -1
-                elif vessel_copy[i] > 0:
-                    vessel_copy[i] -= 1
-            # Create the new state with updated values
-            new_state = State(berth_copy, vessel_copy, time + 1)
-        else:
-            # If vessel_index is valid, update based on the specified vessel
-            # Update the berth array for the specified vessel
-            for berth_index_copy in range(self.vessels[vessel_index][2]):
-                berth_copy[berth_index_copy + berth_index] = self.vessels[vessel_index][1]
-
-            # Update the vessel array for the specified vessel
-            vessel_copy[vessel_index] = self.vessels[vessel_index][1]
-
-            # Create the new state with updated values
-            new_state = State(berth_copy, vessel_copy, time)
-
-        return new_state
+        # Retorna um novo objeto State com a solução modificada
+        return State(solucao)
 
     def actions(self, state):
         """Returns the list of actions that can be executed in the given state."""
         action_list = []
+        
         # Extract the current state information
-        vessels_array= state.vessels_array
-        berth_spaces = self.find_berth_spaces(state)
-
+        vessels_array = [list(v) for v in state.solution]  # Deep copy to avoid modifying the original state
+        #self.debug_print("vessels_array: " + str(vessels_array) + "\n")
         for vessel_index in range(self.vessel_size):
-            if vessels_array[vessel_index] != -1:
+            if vessels_array[vessel_index][1] != -1:  # Vessel already assigned, skip
                 continue
-            for berth_index, berth_size in berth_spaces:
-                if (berth_size < self.vessels[vessel_index][2]):
-                    continue
-                for berth_index1 in range(berth_size):
-                    if (berth_size - berth_index1) < self.vessels[vessel_index][2]:
-                        break
-                    new_action = (vessel_index, berth_index + berth_index1)
-                    action_list.append(new_action)
+            
+            
+            # Initialize vessel start time with its original value
+            start_time = self.vessels[vessel_index][0]
 
-        new_action = (-1, 1)
-        action_list.append(new_action)
+            # Try assigning the vessel to a berth
+            while True:
+                #self.debug_print("State3: " + str(state.solution) + "\n")
+                for berth_index in range(self.berth_size):
+                    
+                    # Check if this action is valid
+                    if self.check_action(vessels_array, (vessel_index, start_time, berth_index)):
+                        action_list.append((vessel_index, start_time, berth_index))
+                        break  # Stop trying further berths for this vessel
+                else:
+                    # If no valid berth was found in this iteration, increment the start time
+                    start_time += 1
+                    continue  # Retry with new start time
+                break  # Break the outer while when an action is found
 
+        #self.debug_print("State4: " + str(state.solution) + "\n")
         return tuple(action_list)
 
-    def find_berth_spaces(self, state):
-        berth_array = state.berth_array 
-        berth_spaces = []
-        berth_index = -1
-        i = 0
-        while i < self.berth_size:
-            if berth_array[i] == 0:  # Found an occupied berth
-                start_index = i
-                count = 0
+    def check_action(self, solution, action):
+        vessel_index, time, berth_index = action
+        vessel_length = self.vessels[vessel_index][2]  # Get the size of the vessel
+        vessel_mooring_time = self.vessels[vessel_index][1]  # Mooring time
+        
+        # Check if the vessel fits in the berth
+        if self.berth_size - berth_index  < vessel_length:
+            return False  # Vessel doesn't fit in the berth range
 
-                # Count contiguous occupied berths
-                while i < self.berth_size and berth_array[i] == 0:
-                    count += 1
-                    i += 1
+        for placed_vessel_index, (placed_time, placed_berth_index) in enumerate(solution):
+            if placed_time == -1:
+                continue  # Skip vessels that haven't been placed yet
 
-                # Add the start index and the number of contiguous occupied berths
-                berth_spaces.append((start_index, count))
-            else:
-                i += 1
-        return berth_spaces
+            # Get the details of the already placed vessel
+            placed_vessel_length = self.vessels[placed_vessel_index][2]
+            placed_vessel_mooring_time = self.vessels[placed_vessel_index][1]
+
+            # Time overlap check
+            if not (time + vessel_mooring_time <= placed_time or placed_time + placed_vessel_mooring_time <= time):
+                #print(solution)
+                # Berth overlap check
+                if not (berth_index + vessel_length <= placed_berth_index or placed_berth_index + placed_vessel_length <= berth_index):
+                    # If both time and berth overlap, the action is not feasible
+                    return False
+
+        # If no conflicts, and the vessel fits, the action is feasible
+        return True
+
 
     def goal_test(self, state):
         """Returns True if the state is a goal"""
-        vessels_array = state.vessels_array  
-        mask = (np.array(vessels_array) != 0)
-        if np.sum(mask) == 0:
-            return True
-        else:
-            return False
+        solution = state.solution
+
+        for time, birth_index in solution:
+            if(time == -1 | birth_index == -1):
+                return False
+        return True
 
     def path_cost(self, c, state1, action, state2):
-        vessels_array1 = state1.vessels_array
-        time1 = state1.time
-        vessels_array2 = state2.vessels_array
-        time2 = state2.time
-        # Check what vessels left in state2 and create a mask for the one who dind't 
-        
-        if time1 == time2:
-            return c
+        vessel_index, time, _ = action
 
-        mask = (np.array(vessels_array1) != -2) & (np.array(vessels_array1) != 0)
-        
+        cost = self.weights[vessel_index]*(time-self.vessels[vessel_index][0]+self.vessels[vessel_index][1])
         # Calculate the cost of the action
-        total_cost = c + np.sum(self.weights*mask)*(time2 - time1)
+        total_cost = c + cost
         #print("Total cost2: " + str(total_cost))
-        """ if time1 != time2:
-            self.debug_print("Total cost: " + str(total_cost))
-            self.debug_print("Mask: " + str(mask))
-            self.debug_print("vessel 1: " + str(vessels_array1) + "\nVessel 2:" + str(vessels_array2))
-            self.debug_print("Weighted time: " + str(self.weights)) """
 
         return total_cost
 
@@ -236,47 +188,18 @@ class BAProblem(search.Problem):
         # Extract the solution (actions) from the solution node
         solution_actions = solution_node.solution()  # This gives the list of actions that led to the goal
         solution = [[-1, -1] for _ in range(self.vessel_size)]
+        self.debug_print("Solution actions: " + str(solution_actions) + "\n")
 
-        time=0
-        for vessels_index, birth_index in solution_actions:
-            if(vessels_index == -1):
-                time+=1
-            else:
-                solution[vessels_index][0]=time
-                solution[vessels_index][1]=birth_index
-
+        # Remove the initial value from solution_actions for all arrays
+        for action in solution_actions:
+            vessel_index, time, berth_index = action
+            # Atualiza a solução: o primeiro elemento é o tempo, o segundo é o índice do berço
+            solution[vessel_index] = [time, berth_index]
+        print(solution)
+        self.debug_print("Final solution: " + str(solution) + "\n")
         # Extract the final path cost from the solution node (total weighted flow time)
         total_cost = solution_node.path_cost
         return solution
-
-    ## Parte 1
-    def load_sol(self, fhs):
-        with open(fhs, 'r') as file:
-            # Read the line from the .plan file
-            line = file.readline().strip()
-            # Convert the string representation of the list to an actual list using ast.literal_eval
-            tuple_list = ast.literal_eval(line)
-            # Convert each tuple into a NumPy array
-            sol = [np.array(t) for t in tuple_list]
-        return tuple_list
-
-    def cost(self, sol):
-        total_cost = 0
-        
-        # Iterate through each vessel in the solution
-        for i, (mooring_time, _) in enumerate(sol):
-            # Extract the vessel's parameters from self
-            arrival_time = self.vessels[i][0] # arrival time
-            processing_time = self.vessels[i][1] # proccessing time
-            weight = self.vessels[i][3] # weight
-            
-            # Calculate the flow time
-            flow_time = (mooring_time + processing_time) - arrival_time
-            
-            # Calculate the total cost for this vessel and sum it 
-            total_cost += flow_time * weight
-        # Return the total cost 
-        return total_cost
 
     def check(self, sol):
         # Creates a list with berth size
@@ -319,7 +242,6 @@ class BAProblem(search.Problem):
                 vessels_times[sol[i][1]+berth_index].append(times)
         return True
 
-
 def main():
 
     start_time = datetime.now()
@@ -342,11 +264,6 @@ def main():
 
     # Proceed to solve the problem
     solution = baproblem.solve()
-
-    if solution:
-        print("\nSolution actions:", solution)
-    else:
-        print("\nNo solution was found.")
 
     # End time
     end_time = datetime.now()
