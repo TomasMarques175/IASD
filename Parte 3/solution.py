@@ -211,7 +211,7 @@ def main():
     start_time = datetime.now()
 
     baproblem = BAProblem()
-    input_file_path = 'Tests/ey102.dat'  # Adjust the path as needed
+    input_file_path = 'Tests/ey101.dat'  # Adjust the path as needed
 
     try:
         with open(input_file_path, 'r') as file:
