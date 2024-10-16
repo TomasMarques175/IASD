@@ -177,7 +177,8 @@ class BAProblem(search.Problem):
 
     def solve(self):
         # Call the uniform_cost_search method from the search module
-        solution_node = search.uniform_cost_search(self)
+        #solution_node = search.uniform_cost_search(self)
+        solution_node = search.astar_search(self, self.heuristic)
 
         # Extract the solution (actions) from the solution node
         solution_actions = solution_node.solution()  # This gives the list of actions that led to the goal
