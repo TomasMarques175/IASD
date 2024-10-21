@@ -102,6 +102,59 @@ class BAProblem(search.Problem):
     def actions(self, state):
         """Returns the list of actions that can be executed in the given state."""
         action_list = []
+        self.debug_print("state.solution: " + str(state.solution))
+        # Extract the current state information
+        vessels_array = [list(v) for v in state.solution]  # Deep copy to avoid modifying the original state
+
+        # If no valid placement was found, create a list with all new possibilities
+        possible_placements = []
+        for vessel_index in range(self.vessel_size):
+            if vessels_array[vessel_index][1] == -1:  # Vessel not assigned, skip
+                continue
+            for i in range(self.berth_size):
+                possible_placements.append(((vessels_array[vessel_index][0]+self.vessels[vessel_index][1]), i))
+            #possible_placements.append(((vessels_array[vessel_index][0]+self.vessels[vessel_index][1]), vessels_array[vessel_index][1]))
+            #possible_placements.append((vessels_array[vessel_index][0], (vessels_array[vessel_index][1]+self.vessels[vessel_index][2])))
+
+        # Order the list of possible placements based on the first value of the tuple and the smallest second value
+        possible_placements.sort(key=lambda x: (x[0], x[1]))
+        self.debug_print(f"possible_placements: {possible_placements}")
+
+        # Now, for each unscheduled vessel, check the earliest berth availability and valid placement
+        for vessel_index in range(self.vessel_size):
+            if vessels_array[vessel_index][1] != -1:  # Vessel already assigned, skip
+                continue
+            
+            vessel_arrival_time = self.vessels[vessel_index][0]  # Arrival time of the vessel
+            vessel_length = self.vessels[vessel_index][2]  # Length of the vessel
+            earliest_start_time = vessel_arrival_time  # Start checking right when the vessel arrives
+            found_flag = False
+            # Try to find a valid placement for the vessel as soon as it arrives
+            for berth_start in range(self.berth_size - vessel_length + 1):  # Check all possible berth start positions
+                # Check if the vessel fits in the available berth space at this time
+                if self.check_action(vessels_array, (vessel_index, earliest_start_time, berth_start)):
+                    # If the vessel fits, add the action to the list
+                    self.debug_print(f"Action: {vessel_index} at time {earliest_start_time} in berth {berth_start}")
+                    action_list.append((vessel_index, earliest_start_time, berth_start))
+                    found_flag = True
+                    break  # Stop trying further berths for this vessel
+
+            if found_flag == True:
+                continue
+
+            for time, berth_index in possible_placements:
+                if time > earliest_start_time:
+                    if self.check_action(vessels_array, (vessel_index, time, berth_index)):
+                        # If the vessel fits, add the action to the list
+                        self.debug_print(f"Action: {vessel_index} at time {time} in berth {berth_index}")
+                        action_list.append((vessel_index, time, berth_index))
+                        break  # Stop trying further berths for this vessel
+
+        return tuple(action_list)
+
+    """ def actions(self, state):
+        Returns the list of actions that can be executed in the given state.
+        action_list = []
         
         # Extract the current state information
         vessels_array = [list(v) for v in state.solution]  # Deep copy to avoid modifying the original state
@@ -125,7 +178,7 @@ class BAProblem(search.Problem):
                     start_time += 1
                     continue  # Retry with new start time
                 break  # Break the outer while when an action is found
-        return tuple(action_list)
+        return tuple(action_list) """
 
     def check_action(self, solution, action):
         vessel_index, time, berth_index = action
@@ -154,7 +207,6 @@ class BAProblem(search.Problem):
 
         # If no conflicts, and the vessel fits, the action is feasible
         return True
-
 
     def goal_test(self, state):
         """Returns True if the state is a goal"""
@@ -198,20 +250,61 @@ class BAProblem(search.Problem):
 
     def heuristic(self, node):
         state = node.state
-        solution = state.solution
         cost = 0
-        for vessel_index, (time, berth_index) in enumerate(solution):
-            if time ==-1:
-                cost += self.weights[vessel_index]*(self.vessels[vessel_index][1])
+        vessels_array = [list(v) for v in state.solution]  # Deep copy to avoid modifying the original state
 
+        # If no valid placement was found, create a list with all new possibilities
+        possible_placements = []
+        for vessel_index in range(self.vessel_size):
+            if vessels_array[vessel_index][1] == -1:  # Vessel not assigned, skip
+                continue
+            for i in range(self.berth_size):
+                possible_placements.append(((vessels_array[vessel_index][0]+self.vessels[vessel_index][1]), i))
+            #possible_placements.append(((vessels_array[vessel_index][0]+self.vessels[vessel_index][1]), vessels_array[vessel_index][1]))
+            #possible_placements.append((vessels_array[vessel_index][0], (vessels_array[vessel_index][1]+self.vessels[vessel_index][2])))
+
+        # Order the list of possible placements based on the first value of the tuple and the smallest second value
+        possible_placements.sort(key=lambda x: (x[0], x[1]))
+        self.debug_print(f"possible_placements: {possible_placements}")
+
+        # Now, for each unscheduled vessel, check the earliest berth availability and valid placement
+        for vessel_index in range(self.vessel_size):
+            if vessels_array[vessel_index][1] != -1:  # Vessel already assigned, skip
+                continue
+            
+            vessel_arrival_time = self.vessels[vessel_index][0]  # Arrival time of the vessel
+            vessel_length = self.vessels[vessel_index][2]  # Length of the vessel
+            earliest_start_time = vessel_arrival_time  # Start checking right when the vessel arrives
+            found_flag = False
+            # Try to find a valid placement for the vessel as soon as it arrives
+            for berth_start in range(self.berth_size - vessel_length + 1):  # Check all possible berth start positions
+                # Check if the vessel fits in the available berth space at this time
+                if self.check_action(vessels_array, (vessel_index, earliest_start_time, berth_start)):
+                    # If the vessel fits, add the action to the list
+                    self.debug_print(f"Action: {vessel_index} at time {earliest_start_time} in berth {berth_start}")
+                    cost += self.weights[vessel_index]*(self.vessels[vessel_index][1]+earliest_start_time-self.vessels[vessel_index][0])
+                    found_flag = True
+                    break  # Stop trying further berths for this vessel
+
+            if found_flag == True:
+                continue
+
+            for time, berth_index in possible_placements:
+                if time > earliest_start_time:
+                    if self.check_action(vessels_array, (vessel_index, time, berth_index)):
+                        # If the vessel fits, add the action to the list
+                        self.debug_print(f"Action: {vessel_index} at time {time} in berth {berth_index}")
+                        cost += self.weights[vessel_index]*(self.vessels[vessel_index][1]+time-self.vessels[vessel_index][0])
+                        break  # Stop trying further berths for this vessel
         return cost
+
 
 def main():
 
     start_time = datetime.now()
 
     baproblem = BAProblem()
-    input_file_path = 'Tests/ey101.dat'  # Adjust the path as needed
+    input_file_path = 'Tests/ex102.dat'  # Adjust the path as needed
 
     try:
         with open(input_file_path, 'r') as file:
