@@ -296,6 +296,24 @@ class BAProblem(search.Problem):
                         self.debug_print(f"Action: {vessel_index} at time {time} in berth {berth_index}")
                         cost += self.weights[vessel_index]*(self.vessels[vessel_index][1]+time-self.vessels[vessel_index][0])
                         break  # Stop trying further berths for this vessel
+        # Calculate the heuristic cost based on the sum of the weighted distances of the vessels from their birth locations
+        for vessel_index in range(self.vessel_size):
+            if vessels_array[vessel_index][1] != -1:  # Vessel already assigned, skip
+                continue
+            # Initialize vessel start time with its original value
+            start_time = self.vessels[vessel_index][0]
+            # Try assigning the vessel to a berth
+            while True:
+                for berth_index in range(self.berth_size):
+                    # Check if this action is valid
+                    if self.check_action(vessels_array, (vessel_index, start_time, berth_index)):
+                        cost += self.weights[vessel_index]*(self.vessels[vessel_index][1]+start_time-self.vessels[vessel_index][0])
+                        break  # Stop trying further berths for this vessel
+                else:
+                    # If no valid berth was found in this iteration, increment the start time
+                    start_time += 1
+                    continue  # Retry with new start time
+                break  # Break the outer while when an action is found
         return cost
 
 
