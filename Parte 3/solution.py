@@ -5,6 +5,7 @@ from datetime import datetime
 
 class State:
     def __init__(self, solution):
+        print("solution: ", solution)
         self.solution = tuple(solution)
         self.unique = 0
         # Creates a unique number based on the solution
@@ -88,6 +89,7 @@ class BAProblem(search.Problem):
         self.min_vessel_size = min(vessel_sizes)
 
     def result(self, state, action):
+        print("action: ", action)
         vessel_index, time, berth_index = action
 
         solucao = [list(v) for v in state.solution]

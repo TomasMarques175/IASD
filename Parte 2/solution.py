@@ -159,7 +159,6 @@ class BAProblem(search.Problem):
         # If no conflicts, and the vessel fits, the action is feasible
         return True
 
-
     def goal_test(self, state):
         """Returns True if the state is a goal"""
         solution = state.solution
