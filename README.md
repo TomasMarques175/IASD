@@ -17,6 +17,15 @@ The solution is built on top of a provided `search.py` framework (based on AIMA)
 
 ---
 
+## Contributors
+
+| Name | GitHub |
+|---|---|
+| Tomás Marques | [@TomasMarques175](https://github.com/TomasMarques175) |
+| Pedro Apolonia | [@apolonia-p](https://github.com/apolonia-p) |
+
+---
+
 ## Project Structure
 
 ```
@@ -130,10 +139,3 @@ python solution.py
 | Uniform Cost Search | Explores states by lowest cumulative path cost |
 | A\* Search | UCS enhanced with a heuristic to reduce the search space |
 | Admissible Heuristic | Estimates remaining cost without overestimating, guaranteeing optimality |
-
----
-
-## Author
-
-**Tomás Marques** — [GitHub](https://github.com/TomasMarques175)
-**Pedro Apolonia** — [GitHub](https://github.com/apolonia-p)
